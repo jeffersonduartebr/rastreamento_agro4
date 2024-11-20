@@ -1,6 +1,7 @@
 import random
 import mysql.connector
 
+
 # Database connection details
 db_config = {
     'host': 'bd',  # Replace with your MariaDB host
