@@ -1,0 +1,57 @@
+services:
+  dashapp:
+    container_name: dashapp
+    hostname: dashapp
+    
+    build:
+      dockerfile: docker_files/dockerfile_app  # Se você tiver um Dockerfile para sua aplicação Dash
+    ports:
+      - "8080:8080"  # Porta para acessar sua aplicação Dash
+    environment:
+      DATABASE_HOST: bd
+      DATABASE_PORT: 3306
+      DATABASE_USER: root
+      DATABASE_PASSWORD: abc.123
+      DATABASE_NAME: rastreamento
+    depends_on:
+      - bd
+    links:
+      - bd
+    networks:
+      - localnet
+      - default
+    command: python3 rastreamento_agro4/main.py       
+
+  bd:
+    build:
+      dockerfile: docker_files/Dockerfile_mariadb
+    container_name: bd
+    hostname: bd
+    restart: always
+    command: [ "--max_connections=2000" ]
+    healthcheck:
+      interval: 60s
+      retries: 15
+      test:
+        [
+          "CMD",
+          "healthcheck.sh",
+          "--su-mysql",
+          "--connect",
+          "--innodb_initialized"
+        ]
+      timeout: 30s
+    environment:
+      MYSQL_ROOT_PASSWORD: abc.123
+      MYSQL_DATABASE: rastreamento
+      MYSQL_PASSWORD: abc.123
+    ports:
+      - "3306:3306"
+    networks:
+      - localnet
+          
+  
+networks:
+  localnet:
+    external: false
+
