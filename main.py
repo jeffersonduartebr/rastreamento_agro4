@@ -5,7 +5,6 @@ import mysql.connector
 import pandas as pd
 from geopy.distance import geodesic  # To calculate distances
 
-
 # Database connection details
 db_config = {
     'host': 'bd',  # Replace with your MariaDB host
@@ -24,12 +23,14 @@ def fetch_data():
     conn.close()
     return df
 
-# Calculate distances and aggregate by vehicle and month
-def calculate_distances(df):
+# Calculate distances and speeds
+def process_data(df):
     df['datetime'] = pd.to_datetime(df[['year', 'month', 'day', 'hour', 'minute', 'seconds']])
     df = df.sort_values(['vehicle_id', 'datetime'])
     
     distances = []
+    speeds = []
+    stops = []
     for vehicle_id, group in df.groupby('vehicle_id'):
         group = group.reset_index(drop=True)
         group['distance'] = group.apply(
@@ -39,84 +40,92 @@ def calculate_distances(df):
             ).meters if row.name > 0 else 0,
             axis=1
         )
+        group['speed'] = group['distance'] / group['datetime'].diff().dt.total_seconds().fillna(1)
+        group['speed'] = group['speed'].fillna(0).replace([float('inf'), float('-inf')], 0) * 3.6  # Convert m/s to km/h
         distances.append(group)
-    
-    distance_df = pd.concat(distances)
-    distance_df['distance'] = distance_df['distance']/1000
-    distance_df['distance'] = distance_df['distance'].round(2)
-    distance_summary = (
-        distance_df.groupby(['vehicle_id', 'year', 'month'])['distance']
-        .sum()
-        .reset_index()
-        .rename(columns={'distance': 'total_distance_meters'})
-    )
-    return distance_summary
+    return pd.concat(distances)
 
 # Create Dash app
 app = dash.Dash(__name__)
 
 # Layout
 app.layout = html.Div([
-    html.H1("Rastreamento - Mapa de visualização e distância percorrida"),
-    dcc.Graph(id="map"),
-    dcc.Dropdown(
-        id="vehicle-dropdown",
-        placeholder="Select a Vehicle ID",
-        options=[],  # Will be populated dynamically
-        multi=True
-    ),
-    html.H2("Distance Traveled per Month"),
-    dcc.Graph(id="distance-table")
+    html.H1("Rastreamento Veicular - Dashboard"),
+    dcc.Tabs(id="tabs", value="trajectory", children=[
+        dcc.Tab(label="Trajetórias (Trajectory)", value="trajectory"),
+        dcc.Tab(label="Paradas e Tempo de Parada (Stops and Idle Time)", value="stops"),
+        dcc.Tab(label="Comparação de Uso de Veículos (Comparison of Vehicle Usage)", value="comparison"),
+        dcc.Tab(label="Velocidade ao Longo do Tempo (Speed Over Time)", value="speed"),
+    ]),
+    html.Div(id="content")
 ])
 
 # Callbacks
 @app.callback(
-    [Output("map", "figure"), Output("vehicle-dropdown", "options"), Output("distance-table", "figure")],
-    [Input("vehicle-dropdown", "value")]
+    Output("content", "children"),
+    [Input("tabs", "value")]
 )
-def update_map_and_table(selected_vehicle_ids):
-    # Fetch data
+def render_tab_content(tab):
     df = fetch_data()
+    processed_df = process_data(df)
     
-    # Filter data by selected vehicle IDs
-    if selected_vehicle_ids:
-        df = df[df["vehicle_id"].isin(selected_vehicle_ids)]
+    if tab == "trajectory":
+        # Trajectory Visualization
+        fig = px.line_mapbox(
+            processed_df,
+            lat="latitude",
+            lon="longitude",
+            color="vehicle_id",
+            line_group="vehicle_id",
+            hover_data={"datetime": True},
+            title="Trajetórias dos Veículos"
+        )
+        fig.update_layout(mapbox_style="open-street-map", height=600)
+        return dcc.Graph(figure=fig)
     
-    # Create map
-    fig_map = px.scatter_mapbox(
-        df,
-        lat="latitude",
-        lon="longitude",
-        color="vehicle_id",
-        hover_data={"latitude": True, "longitude": True, "vehicle_id": True,
-                    "year": True, "month": True, "day": True,
-                    "hour": True, "minute": True, "seconds": True},
-        title="Vehicle Tracking Map",
-        zoom=10
-    )
-    fig_map.update_layout(mapbox_style="open-street-map", height=600)
-
-    # Update dropdown options
-    options = [{"label": vehicle, "value": vehicle} for vehicle in df["vehicle_id"].unique()]
-
-    # Calculate distances
-    distance_summary = calculate_distances(df)
+    elif tab == "stops":
+        # Stops and Idle Time Visualization
+        stop_data = processed_df[processed_df['speed'] < 5]  # Filter low-speed data as stops
+        stop_data['idle_time'] = stop_data['datetime'].diff().dt.total_seconds() / 60  # Idle time in minutes
+        stop_data['idle_time'] = stop_data['idle_time'].fillna(1)
+        fig = px.scatter_mapbox(
+            stop_data,
+            lat="latitude",
+            lon="longitude",
+            size="idle_time",
+            color="vehicle_id",
+            hover_data={"idle_time": "Idle Time (minutes)"},
+            title="Paradas e Tempos de Parada dos Veículos"
+        )
+        fig.update_layout(mapbox_style="open-street-map", height=600)
+        return dcc.Graph(figure=fig)
     
-    # Create distance table
-    fig_table = px.bar(
-        distance_summary,
-        x="month",
-        y="total_distance_meters",
-        color="vehicle_id",
-        barmode="group",
-        text="total_distance_meters",
-        title="Distancia total percorrida por veiculo em cada mes"
-    )
-    fig_table.update_layout(xaxis_title="Month", yaxis_title="Distancia (km)", height=500)
-
-    return fig_map, options, fig_table
-
+    elif tab == "comparison":
+        # Comparison of Vehicle Usage
+        usage_summary = processed_df.groupby("vehicle_id")['distance'].sum().reset_index()
+        usage_summary['distance'] = usage_summary['distance'] / 1000  # Convert to km
+        fig = px.bar(
+            usage_summary,
+            x="vehicle_id",
+            y="distance",
+            text="distance",
+            title="Comparação de Distância Percorrida pelos Veículos (em km)"
+        )
+        fig.update_layout(xaxis_title="Vehicle ID", yaxis_title="Distance (km)", height=600)
+        return dcc.Graph(figure=fig)
+    
+    elif tab == "speed":
+        # Speed Over Time
+        fig = px.line(
+            processed_df,
+            x="datetime",
+            y="speed",
+            color="vehicle_id",
+            title="Velocidade dos Veículos ao Longo do Tempo"
+        )
+        fig.update_layout(xaxis_title="Date/Time", yaxis_title="Speed (km/h)", height=600)
+        return dcc.Graph(figure=fig)
 
 # Run the app
 if __name__ == '__main__':
-   app.run_server(debug=True, port=8080, host='0.0.0.0')
+    app.run_server(debug=True, port=8080, host='0.0.0.0')
