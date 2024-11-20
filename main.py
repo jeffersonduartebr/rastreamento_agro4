@@ -3,6 +3,8 @@ from dash import dcc, html, Input, Output
 import plotly.express as px
 import mysql.connector
 import pandas as pd
+from geopy.distance import geodesic  # To calculate distances
+
 
 # Database connection details
 db_config = {
@@ -40,6 +42,7 @@ def calculate_distances(df):
         distances.append(group)
     
     distance_df = pd.concat(distances)
+    distance_df['distance'] = distance_df['distance']/1000
     distance_summary = (
         distance_df.groupby(['vehicle_id', 'year', 'month'])['distance']
         .sum()
@@ -106,9 +109,9 @@ def update_map_and_table(selected_vehicle_ids):
         color="vehicle_id",
         barmode="group",
         text="total_distance_meters",
-        title="Total Distance Traveled per Month for Each Vehicle"
+        title="Distancia total percorrida por veiculo em cada mes"
     )
-    fig_table.update_layout(xaxis_title="Month", yaxis_title="Distance (meters)", height=500)
+    fig_table.update_layout(xaxis_title="Month", yaxis_title="Distancia (km)", height=500)
 
     return fig_map, options, fig_table
 
