@@ -9,7 +9,9 @@ db_config = {
     'host': '172.17.0.3',  # Replace with your MariaDB host
     'user': 'root',       # Replace with your MariaDB username
     'password': 'abc@123',  # Replace with your MariaDB password
-    'database': 'rastreamento'    # Replace with your database name
+    'database': 'rastreamento',    # Replace with your database name
+    'charset': 'utf8mb4',         # Ensure compatibility with utf8mb4 encoding
+    'collation': 'utf8mb4_general_ci'  # Use a MariaDB-supported collation
 }
 
 # Connect to MariaDB and fetch data
