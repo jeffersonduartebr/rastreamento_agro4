@@ -52,10 +52,10 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H1("Rastreamento Veicular - Dashboard"),
     dcc.Tabs(id="tabs", value="trajectory", children=[
-        dcc.Tab(label="Trajetórias (Trajectory)", value="trajectory"),
-        dcc.Tab(label="Paradas e Tempo de Parada (Stops and Idle Time)", value="stops"),
-        dcc.Tab(label="Comparação de Uso de Veículos (Comparison of Vehicle Usage)", value="comparison"),
-        dcc.Tab(label="Velocidade ao Longo do Tempo (Speed Over Time)", value="speed"),
+        dcc.Tab(label="Trajetórias", value="trajectory"),
+        dcc.Tab(label="Paradas e Tempo de Parada", value="stops"),
+        dcc.Tab(label="Comparação de Uso de Veículos", value="comparison"),
+        dcc.Tab(label="Velocidade ao Longo do Tempo", value="speed"),
     ]),
     html.Div(id="content")
 ])
@@ -87,7 +87,8 @@ def render_tab_content(tab):
         # Stops and Idle Time Visualization
         stop_data = processed_df[processed_df['speed'] < 5]  # Filter low-speed data as stops
         stop_data['idle_time'] = stop_data['datetime'].diff().dt.total_seconds() / 60  # Idle time in minutes
-        stop_data['idle_time'] = stop_data['idle_time'].fillna(1)
+        stop_data['idle_time'] = stop_data['idle_time'].abs().fillna(1)  # Remove negative values
+        #stop_data['idle_time'] = stop_data['idle_time'].fillna(1)
         fig = px.scatter_mapbox(
             stop_data,
             lat="latitude",
@@ -104,6 +105,7 @@ def render_tab_content(tab):
         # Comparison of Vehicle Usage
         usage_summary = processed_df.groupby("vehicle_id")['distance'].sum().reset_index()
         usage_summary['distance'] = usage_summary['distance'] / 1000  # Convert to km
+        usage_summary['distance'] = usage_summary['distance'].round(2)
         fig = px.bar(
             usage_summary,
             x="vehicle_id",
@@ -111,7 +113,7 @@ def render_tab_content(tab):
             text="distance",
             title="Comparação de Distância Percorrida pelos Veículos (em km)"
         )
-        fig.update_layout(xaxis_title="Vehicle ID", yaxis_title="Distance (km)", height=600)
+        fig.update_layout(xaxis_title="Vehicle ID", yaxis_title="Distância (km)", height=600)
         return dcc.Graph(figure=fig)
     
     elif tab == "speed":
@@ -123,7 +125,7 @@ def render_tab_content(tab):
             color="vehicle_id",
             title="Velocidade dos Veículos ao Longo do Tempo"
         )
-        fig.update_layout(xaxis_title="Date/Time", yaxis_title="Speed (km/h)", height=600)
+        fig.update_layout(xaxis_title="Date/Time", yaxis_title="Velocidade (km/h)", height=600)
         return dcc.Graph(figure=fig)
 
 # Run the app
