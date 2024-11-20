@@ -43,6 +43,7 @@ def calculate_distances(df):
     
     distance_df = pd.concat(distances)
     distance_df['distance'] = distance_df['distance']/1000
+    distance_df['distance'] = distance_df['distance'].round(2)
     distance_summary = (
         distance_df.groupby(['vehicle_id', 'year', 'month'])['distance']
         .sum()
@@ -56,7 +57,7 @@ app = dash.Dash(__name__)
 
 # Layout
 app.layout = html.Div([
-    html.H1("Rastreamento - Map Visualization and Distance Table"),
+    html.H1("Rastreamento - Mapa de visualização e distância percorrida"),
     dcc.Graph(id="map"),
     dcc.Dropdown(
         id="vehicle-dropdown",
