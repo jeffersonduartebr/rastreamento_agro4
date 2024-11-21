@@ -57,13 +57,17 @@ app.layout = html.Div([
         dcc.Tab(label="Comparação de Uso de Veículos", value="comparison"),
         dcc.Tab(label="Velocidade ao Longo do Tempo", value="speed"),
     ]),
-    html.Div(id="content")
+    html.Div(id="content"),
+    dcc.Interval(
+        id="interval-component",
+        interval=300000,  # 300,000 ms = 5 minutes
+        n_intervals=0
+    )
 ])
 
-# Callbacks
 @app.callback(
     Output("content", "children"),
-    [Input("tabs", "value")]
+    [Input("tabs", "value"), Input("interval-component", "n_intervals")]
 )
 def render_tab_content(tab):
     df = fetch_data()
